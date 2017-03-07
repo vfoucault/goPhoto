@@ -13,6 +13,7 @@ import (
 	//"github.com/davecgh/go-spew/spew"
 	"fmt"
 	//"go/constant"
+	"sync"
 )
 
 const fileMode = 0755
@@ -152,10 +153,25 @@ func copyImage(photo Photo) {
 	defer reader.Close()
 	defer writer.Close()
 	io.Copy(writer, reader)
+	writer.Sync()
+
 
 }
 
+func process(c chan Photo) {
+
+	for photo := range c {
+
+		Info.Println("Copying ", photo.Name, "to", photo.DestPath)
+
+		copyImage(photo)
+
+	}
+}
+
 func main() {
+
+	start := time.Now()
 
 	Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
 
@@ -200,12 +216,33 @@ ______ |  |__   _____/  |_  ____ |   | _____ ______   ____________/  |_
 		}
 	}
 
-	for _, photo := range colPhotos {
-		Info.Println("Copying ", photo.Name, "to", photo.DestPath)
+	const workers = 4
 
-		copyImage(photo)
+
+	c := make(chan Photo)
+
+	wg := sync.WaitGroup{}
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			process(c)
+			wg.Done()
+		}()
 	}
 
-	Info.Println("End of program. Took", )
+	for _, photo := range colPhotos {
+		c <- photo
+	}
+	close(c)
+
+	wg.Wait()
+
+
+
+
+	elapsed := time.Since(start)
+
+
+	Info.Println("End of program. Took", elapsed)
 
 }
