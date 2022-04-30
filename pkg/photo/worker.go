@@ -38,7 +38,7 @@ func (w *Worker) Start() error {
 			if err != nil {
 				log.Errorf(err.Error())
 			}
-			_, err = io.Copy(writer, reader)
+			bytesWritten, err := io.Copy(writer, reader)
 			if err != nil {
 				log.Errorf("error copying file %v. err=%v", p.FileName, err.Error())
 			}
@@ -48,7 +48,7 @@ func (w *Worker) Start() error {
 
 			os.Chtimes(writer.Name(), p.Atime, p.Mtime)
 
-			w.Copier.IncrementStats()
+			w.Copier.IncrementStats(bytesWritten)
 			w.Copier.ProgressBar.Add(1)
 		}
 	}

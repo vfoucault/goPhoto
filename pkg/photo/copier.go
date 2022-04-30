@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"code.cloudfoundry.org/bytefmt"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/vfoucault/goPhoto/pkg/config"
@@ -20,9 +21,12 @@ import (
 )
 
 type Copier struct {
-	Config      *config.Config
-	Photos      []*Photo
-	Stats       int
+	Config *config.Config
+	Photos []*Photo
+	Stats  struct {
+		Count int
+		Size  int64
+	}
 	StatsMutex  sync.Mutex
 	Workers     []*Worker
 	CopyQueue   chan *Photo
@@ -32,10 +36,11 @@ type Copier struct {
 	ProgressBar *progressbar.ProgressBar
 }
 
-func (c *Copier) IncrementStats() {
+func (c *Copier) IncrementStats(size int64) {
 	c.StatsMutex.Lock()
 	defer c.StatsMutex.Unlock()
-	c.Stats += 1
+	c.Stats.Count += 1
+	c.Stats.Size += size
 }
 
 func (c *Copier) CreateDestDirs() {
@@ -64,7 +69,7 @@ func NewCopier(config *config.Config, pctx context.Context) *Copier {
 
 func (c *Copier) Wait() {
 	for {
-		if len(c.Photos) == c.Stats {
+		if len(c.Photos) == c.Stats.Count {
 			c.Stop()
 			break
 		}
@@ -163,7 +168,8 @@ func RunCopier(cfg *config.Config) {
 	elapsed := time.Since(start)
 	fmt.Println()
 	log.Infof("Copy ended. Took %v", elapsed)
-	log.Infof("Copied %d images.", copier.Stats)
+	log.Infof("Copied %d images / %s.", copier.Stats.Count, bytefmt.ByteSize(uint64(copier.Stats.Size)))
+	log.Infof("Byte rate %v/s", bytefmt.ByteSize(uint64(copier.Stats.Size/int64(elapsed.Seconds()))))
 }
 
 func (c *Copier) InitProgressBar() {
