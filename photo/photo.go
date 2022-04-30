@@ -3,10 +3,6 @@ package photo
 import (
 	"context"
 	"fmt"
-	"github.com/rwcarlsen/goexif/exif"
-	"github.com/schollz/progressbar/v3"
-	"github.com/vfoucault/goPhoto/config"
-	"github.com/vfoucault/goPhoto/logger"
 	"io"
 	"io/ioutil"
 	"os"
@@ -15,6 +11,11 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/rwcarlsen/goexif/exif"
+	"github.com/schollz/progressbar/v3"
+	"github.com/vfoucault/goPhoto/config"
+	"github.com/vfoucault/goPhoto/logger"
 )
 
 var (
