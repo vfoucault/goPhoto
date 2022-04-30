@@ -36,7 +36,7 @@ type Copier struct {
 	ProgressBar *progressbar.ProgressBar
 }
 
-func (c *Copier) IncrementStats(size int64) {
+func (c *Copier) incrementStats(size int64) {
 	c.StatsMutex.Lock()
 	defer c.StatsMutex.Unlock()
 	c.Stats.Count += 1

@@ -48,7 +48,7 @@ func (w *Worker) Start() error {
 
 			os.Chtimes(writer.Name(), p.Atime, p.Mtime)
 
-			w.Copier.IncrementStats(bytesWritten)
+			w.Copier.incrementStats(bytesWritten)
 			w.Copier.ProgressBar.Add(1)
 		}
 	}
