@@ -161,7 +161,10 @@ func (c *Copier) Search() {
 	} else {
 		filepath.Walk(c.Config.SourceDirectory, func(aPath string, f os.FileInfo, _ error) error {
 			if isImage(f) {
-				photo := &Photo{Path: filepath.Dir(aPath), FileName: f.Name(), Copier: c}
+				stat := f.Sys().(*syscall.Stat_t)
+				atime := time.Unix(int64(stat.Atimespec.Sec), int64(stat.Atimespec.Nsec))
+				ctime := time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
+				photo := &Photo{Path: filepath.Dir(aPath), FileName: f.Name(), Copier: c, Atime: atime, Ctime: ctime, Mtime: f.ModTime()}
 				if err := photo.GetDateTaken(); err != nil {
 					log.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
 				} else {
@@ -169,7 +172,6 @@ func (c *Copier) Search() {
 					c.Photos = append(c.Photos, photo)
 				}
 			}
-			//log.Infof(path.Join(c.Config.SourceDirectory, f.Name()))
 			return nil
 		})
 	}
@@ -270,6 +272,8 @@ func (w *Worker) Start() error {
 			writer.Sync()
 			reader.Close()
 			writer.Close()
+
+			os.Chtimes(writer.Name(), p.Atime, p.Mtime)
 
 			w.Copier.IncrementStats()
 			w.Copier.ProgressBar.Add(1)
