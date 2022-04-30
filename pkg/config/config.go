@@ -20,4 +20,5 @@ func (c *Config) PrintConfig() {
 	log.Infof(" * SourceDirectory = %v", c.SourceDirectory)
 	log.Infof(" * NoRecurse = %v", c.NoRecurse)
 	log.Infof(" * Verbose = %v", c.Verbose)
+	log.Infof(" * Running with %d workers", c.Workers)
 }

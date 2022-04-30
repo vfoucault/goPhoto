@@ -47,7 +47,8 @@ func RunCopier(cfg *config.Config) {
 
 	elapsed := time.Since(start)
 	fmt.Println()
-	log.Infof("End of program. Took %v", elapsed)
+	log.Infof("Copy ended. Took %v", elapsed)
+	log.Infof("Copied %d images.", copier.Stats)
 }
 
 //func handleSignals(signChannel chan os.Signal, processorManager *models.ProcessorManager) {
