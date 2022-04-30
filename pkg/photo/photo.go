@@ -6,21 +6,68 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/schollz/progressbar/v3"
-	"github.com/vfoucault/goPhoto/config"
-	"github.com/vfoucault/goPhoto/logger"
+	log "github.com/sirupsen/logrus"
+	"github.com/vfoucault/goPhoto/pkg/config"
 )
 
 var (
 	regexImage, _ = regexp.Compile(`^.+(?i)(jpe?g|gif|png|tiff)$`)
 )
+
+func RunCopier(cfg *config.Config) {
+	start := time.Now()
+
+	cfg.PrintConfig()
+
+	ctx := context.Background()
+	copier := NewCopier(cfg, ctx)
+
+	// Handle stop and more
+	signalChannel := make(chan os.Signal, 2)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	go handleSignals(signalChannel, copier)
+
+	log.Debugf("Will have to copy %v pictures", len(copier.Photos))
+
+	if err := copier.Start(); err != nil {
+		log.Errorf(err.Error())
+		os.Exit(1)
+	}
+	copier.Wait()
+
+	elapsed := time.Since(start)
+	fmt.Println()
+	log.Infof("End of program. Took %v", elapsed)
+}
+
+//func handleSignals(signChannel chan os.Signal, processorManager *models.ProcessorManager) {
+func handleSignals(signChannel chan os.Signal, copier *Copier) {
+	log.Debugf("Running signal handler")
+	// Handle stop and more
+	for {
+		sig := <-signChannel
+		switch sig {
+		case os.Interrupt, syscall.SIGTERM:
+			log.Infof("Received signal %v", sig)
+			log.Infof("Shutting down application. Kill running/pending jobs")
+			copier.Stop()
+			return
+		default:
+			log.Errorf("Unable to handle signal %v", sig.String())
+		}
+	}
+
+}
 
 type Copier struct {
 	Config      *config.Config
@@ -75,10 +122,10 @@ func NewCopier(config *config.Config, ctx context.Context) *Copier {
 		dirs[x.GetTargetPath()] += 1
 	}
 	for k, _ := range dirs {
-		logger.Debugf("creating directory %v", k)
+		log.Debugf("creating directory %v", k)
 		err := os.MkdirAll(k, 0750)
 		if err != nil {
-			logger.Errorf("unable to create directory %v. err=%v", k, err.Error())
+			log.Errorf("unable to create directory %v. err=%v", k, err.Error())
 		}
 	}
 	return copier
@@ -105,7 +152,7 @@ func (c *Copier) Search() {
 				//photo.Ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
 				//photo.Mtime = time.Unix(int64(stat.Mtimespec.Sec), int64(stat.Mtimespec.Nsec))
 				if err := photo.GetDateTaken(); err != nil {
-					logger.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
+					log.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
 				} else {
 					c.Photos = append(c.Photos, photo)
 				}
@@ -116,13 +163,13 @@ func (c *Copier) Search() {
 			if isImage(f) {
 				photo := &Photo{Path: filepath.Dir(aPath), FileName: f.Name(), Copier: c}
 				if err := photo.GetDateTaken(); err != nil {
-					logger.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
+					log.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
 				} else {
-					logger.Debugf("adding photo %v", f.Name())
+					log.Debugf("adding photo %v", f.Name())
 					c.Photos = append(c.Photos, photo)
 				}
 			}
-			//logger.Infof(path.Join(c.Config.SourceDirectory, f.Name()))
+			//log.Infof(path.Join(c.Config.SourceDirectory, f.Name()))
 			return nil
 		})
 	}
@@ -182,7 +229,7 @@ func (c *Copier) Start() error {
 }
 
 func (c *Copier) Stop() {
-	logger.Debugf("Stopping copier")
+	log.Debugf("Stopping copier")
 	c.CancelFunc()
 }
 
@@ -199,26 +246,26 @@ type Worker struct {
 }
 
 func (w *Worker) Start() error {
-	logger.Debugf("Starting worker id=%v", w.ID)
+	log.Debugf("Starting worker id=%v", w.ID)
 	for {
 		select {
 		case <-w.Copier.Context.Done():
-			logger.Debugf("Stopping worker id=%v", w.ID)
+			log.Debugf("Stopping worker id=%v", w.ID)
 			w.Copier.Wg.Done()
 			return nil
 		case p := <-w.Copier.CopyQueue:
-			logger.Debugf("copying file %v to %v", p.FileName, p.GetTargetPath())
+			log.Debugf("copying file %v to %v", p.FileName, p.GetTargetPath())
 			reader, err := os.Open(path.Join(p.Path, p.FileName))
 			if err != nil {
-				logger.Errorf(err.Error())
+				log.Errorf(err.Error())
 			}
 			writer, err := os.Create(path.Join(p.GetTargetPath(), p.FileName))
 			if err != nil {
-				logger.Errorf(err.Error())
+				log.Errorf(err.Error())
 			}
 			_, err = io.Copy(writer, reader)
 			if err != nil {
-				logger.Errorf("error copying file %v. err=%v", p.FileName, err.Error())
+				log.Errorf("error copying file %v. err=%v", p.FileName, err.Error())
 			}
 			writer.Sync()
 			reader.Close()
