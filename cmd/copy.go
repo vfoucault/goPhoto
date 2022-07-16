@@ -39,6 +39,8 @@ func copyInit() {
 
 	cmdCopyPhoto.PersistentFlags().StringVarP(&srcDirectory, "src", "s", ".", "Source directory")
 	cmdCopyPhoto.PersistentFlags().StringVarP(&dstDirectory, "dst", "d", ".", "Destination directory")
+	cmdCopyPhoto.MarkPersistentFlagRequired("src")
+	cmdCopyPhoto.MarkPersistentFlagRequired("dst")
 	cmdCopyPhoto.PersistentFlags().StringVarP(&dstFileFormat, "format", "", "2006/2006-01-02", "Destination directory format")
 	cmdCopyPhoto.PersistentFlags().BoolVarP(&copyNoRecurse, "no-recurse", "", false, "Don't search recursively for photos")
 	cmdCopyPhoto.PersistentFlags().IntVarP(&copyNumWorkers, "num-workers", "", runtime.NumCPU(), "number of workers. Default to runtime.NumCPU()")
