@@ -77,13 +77,18 @@ func NewCopier(config *config.Config, pctx context.Context) *Copier {
 
 func (c *Copier) Wait() {
 	for {
-		if len(c.Photos) == c.Stats.Count+c.Stats.Skipped {
-			c.Stop()
-			break
+		select {
+		case <-c.Context.Done():
+			return
+		default:
+			if len(c.Photos) == c.Stats.Count+c.Stats.Skipped {
+				c.ProgressBar.Clear()
+				c.Stop()
+				break
+			}
+			time.Sleep(time.Second)
 		}
-		time.Sleep(time.Second)
 	}
-	c.Wg.Wait()
 }
 
 func (c *Copier) Start() error {
@@ -178,11 +183,11 @@ func RunCopier(cfg *config.Config) {
 	copier.Wait()
 
 	elapsed := time.Since(start)
-	fmt.Println()
+	//fmt.Println()
 	log.Infof("Copy ended. Took %v", elapsed)
 	log.Infof("Copied %d images / %s.", copier.Stats.Count, bytefmt.ByteSize(uint64(copier.Stats.Size)))
 	if copier.Stats.Skipped > 0 {
-		log.Infof("Skipped %d images that where duplicates", copier.Stats.Skipped)
+		log.Infof("Skipped %d images that were duplicates", copier.Stats.Skipped)
 	}
 	log.Infof("Byte rate %v/s", bytefmt.ByteSize(uint64(copier.Stats.Size/int64(elapsed.Seconds()))))
 }
