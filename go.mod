@@ -4,7 +4,9 @@ go 1.18
 
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
-	github.com/barasher/go-exiftool v1.7.0
+	github.com/flopp/go-findfont v0.1.0
+	github.com/fogleman/gg v1.3.0
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/schollz/progressbar/v3 v3.1.1
 	github.com/sirupsen/logrus v1.5.0
@@ -15,6 +17,7 @@ require (
 
 require (
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
@@ -32,6 +35,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
+	golang.org/x/image v0.0.0-20190802002840-cff245a6509b // indirect
 	golang.org/x/sys v0.0.0-20220429233432-b5fbb4746d32 // indirect
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
 	golang.org/x/text v0.3.7 // indirect
