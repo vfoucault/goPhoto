@@ -25,8 +25,9 @@ type Copier struct {
 	Config *config.Config
 	Photos []*Photo
 	Stats  struct {
-		Count int
-		Size  int64
+		Count   int
+		Skipped int
+		Size    int64
 	}
 	StatsMutex  sync.Mutex
 	Workers     []*Worker
@@ -42,6 +43,12 @@ func (c *Copier) incrementStats(size int64) {
 	defer c.StatsMutex.Unlock()
 	c.Stats.Count += 1
 	c.Stats.Size += size
+}
+
+func (c *Copier) incrementSkipped() {
+	c.StatsMutex.Lock()
+	defer c.StatsMutex.Unlock()
+	c.Stats.Skipped += 1
 }
 
 func (c *Copier) CreateDestDirs() {
@@ -70,7 +77,7 @@ func NewCopier(config *config.Config, pctx context.Context) *Copier {
 
 func (c *Copier) Wait() {
 	for {
-		if len(c.Photos) == c.Stats.Count {
+		if len(c.Photos) == c.Stats.Count+c.Stats.Skipped {
 			c.Stop()
 			break
 		}
@@ -137,6 +144,10 @@ func (c *Copier) addPhoto(f fs.FileInfo, fPath string) {
 	if err := photo.GetDateTaken(); err != nil {
 		log.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
 	} else {
+		err := photo.GetHash()
+		if err != nil {
+			log.Errorf("unable to get hash for file %s", f.Name())
+		}
 		c.Photos = append(c.Photos, photo)
 	}
 }
@@ -170,6 +181,9 @@ func RunCopier(cfg *config.Config) {
 	fmt.Println()
 	log.Infof("Copy ended. Took %v", elapsed)
 	log.Infof("Copied %d images / %s.", copier.Stats.Count, bytefmt.ByteSize(uint64(copier.Stats.Size)))
+	if copier.Stats.Skipped > 0 {
+		log.Infof("Skipped %d images that where already present", copier.Stats.Skipped)
+	}
 	log.Infof("Byte rate %v/s", bytefmt.ByteSize(uint64(copier.Stats.Size/int64(elapsed.Seconds()))))
 }
 
