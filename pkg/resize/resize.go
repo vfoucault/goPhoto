@@ -7,7 +7,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/flopp/go-findfont"
 	"github.com/fogleman/gg"
@@ -22,44 +24,104 @@ type WaterMark struct {
 	Text  string
 }
 
+type Task struct {
+	Path     string
+	Name     string
+	SavePath string
+	Resize   struct {
+		Enabled       bool
+		Width, Height uint
+	}
+	Watermark struct {
+		Enabled bool
+		Color   color.Gray16
+		Size    float64
+		Text    string
+	}
+}
+
 func PhotoResize(w, h uint, srcPath, dstPath string, addText bool, wm ...WaterMark) error {
 	// list all images
-	var hasErrors bool
+	tasks := make(chan *Task, runtime.NumCPU())
+	// Launch workers
+	wg := &sync.WaitGroup{}
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go func() {
+			for {
+				task := <-tasks
+				//log.Infof("Will have to run task for task %s", task.Name)
+				hasErrors := ProcessTask(task)
+				if hasErrors {
+					log.Errorf("processing %s led to errors. check logs.", task.Name)
+				}
+				wg.Done()
+			}
+		}()
+	}
 	filepath.Walk(srcPath, func(aPath string, f os.FileInfo, _ error) error {
 		if utils.IsImage(f) {
-			log.Infof("resizing %s...", f.Name())
-			imagePath := path.Join(strings.TrimSuffix(aPath, f.Name()), f.Name())
-			img, err := gg.LoadImage(imagePath)
-			if err != nil {
-				log.Errorf("unable to load image %s. err=%w", imagePath, err.Error())
-				hasErrors = true
+			// create Task struct
+			task := &Task{
+				Path:     strings.TrimSuffix(aPath, f.Name()),
+				Name:     f.Name(),
+				SavePath: dstPath,
+				Resize: struct {
+					Enabled       bool
+					Width, Height uint
+				}{
+					Enabled: true,
+					Width:   w,
+					Height:  h,
+				},
+				Watermark: struct {
+					Enabled bool
+					Color   color.Gray16
+					Size    float64
+					Text    string
+				}{
+					Enabled: addText,
+					Color:   wm[0].Color,
+					Size:    wm[0].Size,
+					Text:    wm[0].Text,
+				},
 			}
-			img, err = resizeImage(w, h, img)
-			if err != nil {
-				log.Errorf("unable to resize image %s, err=%s", imagePath, err.Error())
-				hasErrors = true
-			}
-			if addText {
-				log.Infof("Adding watermark %s to image %s", wm[0].Text, imagePath)
-				img, err = addWatermark(img, wm[0])
-				if err != nil {
-					log.Errorf("unable to add watermark %s to image %s. err=%v", wm[0].Text, imagePath, err.Error())
-				}
-			}
-			imageName := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
-			err = saveImage(dstPath, fmt.Sprintf("%s_%dx%d.jpg", imageName, w, h), img)
-			if err != nil {
-				log.Errorf("unable to save image %s. err=%s", path.Join(dstPath, fmt.Sprintf("%s_%dx%d.jpg", imageName, w, h)), err.Error())
-				hasErrors = true
-			}
+			tasks <- task
+			wg.Add(1)
 		}
 		return nil
 	})
-	if hasErrors {
-		return fmt.Errorf("heck log for errors")
-	}
-
+	wg.Wait()
 	return nil
+}
+
+func ProcessTask(task *Task) bool {
+	log.Infof("resizing %s...", task.Name)
+	imagePath := path.Join(task.Path, task.Name)
+	img, err := gg.LoadImage(imagePath)
+	var hasErrors bool
+	if err != nil {
+		log.Errorf("unable to load image %s. err=%w", imagePath, err.Error())
+		hasErrors = true
+	}
+	img, err = resizeImage(task.Resize.Width, task.Resize.Height, img)
+	if err != nil {
+		log.Errorf("unable to resize image %s, err=%s", imagePath, err.Error())
+		hasErrors = true
+	}
+	if task.Watermark.Enabled {
+		log.Infof("Adding watermark %s to image %s", task.Watermark.Text, imagePath)
+		img, err = addWatermark(img, task.Watermark.Text, task.Watermark.Color, task.Watermark.Size)
+		if err != nil {
+			log.Errorf("unable to add watermark %s to image %s. err=%v", task.Watermark.Text, imagePath, err.Error())
+		}
+	}
+	imageName := strings.TrimSuffix(task.Name, filepath.Ext(task.Name))
+	err = saveImage(task.SavePath, fmt.Sprintf("%s_%dx%d.jpg", imageName, task.Resize.Width, task.Resize.Height), img)
+	if err != nil {
+		log.Errorf("unable to save image %s. err=%s", path.Join(task.SavePath, fmt.Sprintf("%s_%dx%d.jpg", imageName, task.Resize.Width, task.Resize.Height)), err.Error())
+		hasErrors = true
+	}
+	return hasErrors
 }
 
 func resizeImage(w, h uint, img image.Image) (image.Image, error) {
@@ -72,7 +134,7 @@ func saveImage(filePath, fileName string, img image.Image) error {
 	return gg.SaveJPG(path.Join(filePath, fileName), img, 90)
 }
 
-func addWatermark(img image.Image, wm WaterMark) (image.Image, error) {
+func addWatermark(img image.Image, text string, c color.Gray16, size float64) (image.Image, error) {
 	imgWidth := img.Bounds().Dx()
 	imgHeight := img.Bounds().Dy()
 
@@ -87,7 +149,7 @@ func addWatermark(img image.Image, wm WaterMark) (image.Image, error) {
 			return nil, fmt.Errorf("unable to load font. err=%s", err.Error())
 		}
 	}
-	if err := dc.LoadFontFace(fontPath, wm.Size); err != nil {
+	if err := dc.LoadFontFace(fontPath, size); err != nil {
 		return nil, fmt.Errorf("unable to load font. err=%s", err.Error())
 	}
 
@@ -96,8 +158,8 @@ func addWatermark(img image.Image, wm WaterMark) (image.Image, error) {
 	y := float64(imgHeight) - 20
 	maxWidth := float64(imgWidth) - 60.0
 
-	dc.SetColor(wm.Color)
-	dc.DrawStringWrapped(wm.Text, x, y, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
+	dc.SetColor(c)
+	dc.DrawStringWrapped(text, x, y, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
 
 	return dc.Image(), nil
 }
