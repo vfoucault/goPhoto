@@ -35,7 +35,7 @@ func (w *Worker) Start() error {
 			if ok := w.CheckSameContents(p); !ok {
 				w.Copy(p)
 			} else {
-				w.Copier.incrementSkipped()
+				w.Copier.IncrementSkipped()
 				w.Copier.ProgressBar.Add(1)
 			}
 		}
@@ -59,7 +59,7 @@ func (w *Worker) Copy(p *Photo) {
 
 	os.Chtimes(writer.Name(), p.Atime, p.Mtime)
 
-	w.Copier.incrementStats(bytesWritten)
+	w.Copier.IncrementStats(bytesWritten)
 	w.Copier.ProgressBar.Add(1)
 }
 
@@ -76,7 +76,7 @@ func (w *Worker) CheckSameContents(p *Photo) bool {
 				return false
 			}
 			sum := h.Sum(nil)
-			if string(sum) != string(p.md5) {
+			if string(sum) != string(p.Md5) {
 				return false
 			} else {
 				return true

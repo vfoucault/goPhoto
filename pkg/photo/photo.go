@@ -19,7 +19,7 @@ type Photo struct {
 	Atime     time.Time
 	Ctime     time.Time
 	Mtime     time.Time
-	md5       []byte
+	Md5       []byte
 	File      *os.File
 }
 
@@ -48,7 +48,7 @@ func (p *Photo) GetHash() error {
 	if _, err := io.Copy(h, p.File); err != nil {
 		return fmt.Errorf("unable to compute md5 for file %s. err=%v", path.Join(p.Path, p.FileName), err.Error())
 	}
-	p.md5 = h.Sum(nil)
+	p.Md5 = h.Sum(nil)
 	return nil
 }
 

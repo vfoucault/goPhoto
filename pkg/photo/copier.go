@@ -38,14 +38,14 @@ type Copier struct {
 	ProgressBar *progressbar.ProgressBar
 }
 
-func (c *Copier) incrementStats(size int64) {
+func (c *Copier) IncrementStats(size int64) {
 	c.StatsMutex.Lock()
 	defer c.StatsMutex.Unlock()
 	c.Stats.Count += 1
 	c.Stats.Size += size
 }
 
-func (c *Copier) incrementSkipped() {
+func (c *Copier) IncrementSkipped() {
 	c.StatsMutex.Lock()
 	defer c.StatsMutex.Unlock()
 	c.Stats.Skipped += 1
@@ -182,7 +182,7 @@ func RunCopier(cfg *config.Config) {
 	log.Infof("Copy ended. Took %v", elapsed)
 	log.Infof("Copied %d images / %s.", copier.Stats.Count, bytefmt.ByteSize(uint64(copier.Stats.Size)))
 	if copier.Stats.Skipped > 0 {
-		log.Infof("Skipped %d images that where already present", copier.Stats.Skipped)
+		log.Infof("Skipped %d images that where duplicates", copier.Stats.Skipped)
 	}
 	log.Infof("Byte rate %v/s", bytefmt.ByteSize(uint64(copier.Stats.Size/int64(elapsed.Seconds()))))
 }

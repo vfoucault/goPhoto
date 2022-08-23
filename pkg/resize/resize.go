@@ -28,7 +28,7 @@ func PhotoResize(w, h uint, srcPath, dstPath string, addText bool, wm ...WaterMa
 	filepath.Walk(srcPath, func(aPath string, f os.FileInfo, _ error) error {
 		if utils.IsImage(f) {
 			log.Infof("resizing %s...", f.Name())
-			imagePath := path.Join(srcPath, f.Name())
+			imagePath := path.Join(strings.TrimSuffix(aPath, f.Name()), f.Name())
 			img, err := gg.LoadImage(imagePath)
 			if err != nil {
 				log.Errorf("unable to load image %s. err=%w", imagePath, err.Error())
