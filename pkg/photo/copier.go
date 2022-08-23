@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -114,21 +115,21 @@ func (c *Copier) Search() {
 		files, _ := ioutil.ReadDir(c.Config.SourceDirectory)
 		for _, f := range files {
 			if utils.IsImage(f) {
-				c.addPhoto(f)
+				c.addPhoto(f, c.Config.SourceDirectory)
 			}
 		}
 	} else {
 		filepath.Walk(c.Config.SourceDirectory, func(aPath string, f os.FileInfo, _ error) error {
 			if utils.IsImage(f) {
-				c.addPhoto(f)
+				c.addPhoto(f, strings.TrimSuffix(aPath, f.Name()))
 			}
 			return nil
 		})
 	}
 }
 
-func (c *Copier) addPhoto(f fs.FileInfo) {
-	photo := &Photo{Path: c.Config.SourceDirectory, FileName: f.Name(), Copier: c}
+func (c *Copier) addPhoto(f fs.FileInfo, fPath string) {
+	photo := &Photo{Path: fPath, FileName: f.Name(), Copier: c}
 	stat := f.Sys().(*syscall.Stat_t)
 	photo.Atime = time.Unix(stat.Atimespec.Sec, stat.Atimespec.Nsec)
 	photo.Ctime = time.Unix(stat.Ctimespec.Sec, stat.Ctimespec.Nsec)
