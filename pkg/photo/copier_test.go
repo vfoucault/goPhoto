@@ -70,7 +70,7 @@ func TestCopier_incrementStats(t *testing.T) {
 				Wg:          tt.fields.Wg,
 				ProgressBar: tt.fields.ProgressBar,
 			}
-			c.incrementStats(tt.args.size)
+			c.IncrementStats(tt.args.size)
 			if c.Stats.Size != tt.wantSize {
 				t.Errorf("incrementStats() got size=%d want size=%d", c.Stats.Size, tt.wantSize)
 			}
