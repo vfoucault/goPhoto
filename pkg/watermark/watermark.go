@@ -1,4 +1,4 @@
-package resize
+package watermark
 
 import (
 	"fmt"
@@ -11,14 +11,19 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/flopp/go-findfont"
 	"github.com/fogleman/gg"
-	"github.com/nfnt/resize"
 	log "github.com/sirupsen/logrus"
 	"github.com/vfoucault/goPhoto/pkg/utils"
-	"github.com/vfoucault/goPhoto/pkg/watermark"
 )
 
-func PhotoResize(w, h uint, srcPath, dstPath string, addText bool, wm ...watermark.WaterMark) error {
+type WaterMark struct {
+	Color color.Gray16
+	Size  float64
+	Text  string
+}
+
+func AddWatermarkToImage(srcPath, dstPath string, addText bool, wm ...WaterMark) error {
 	// list all images
 	tasks := make(chan *utils.Task, runtime.NumCPU())
 	// Launch workers
@@ -43,14 +48,6 @@ func PhotoResize(w, h uint, srcPath, dstPath string, addText bool, wm ...waterma
 				Path:     strings.TrimSuffix(aPath, f.Name()),
 				Name:     f.Name(),
 				SavePath: dstPath,
-				Resize: struct {
-					Enabled       bool
-					Width, Height uint
-				}{
-					Enabled: true,
-					Width:   w,
-					Height:  h,
-				},
 				Watermark: struct {
 					Enabled bool
 					Color   color.Gray16
@@ -73,7 +70,6 @@ func PhotoResize(w, h uint, srcPath, dstPath string, addText bool, wm ...waterma
 }
 
 func ProcessTask(task *utils.Task) bool {
-	log.Infof("resizing %s...", task.Name)
 	imagePath := path.Join(task.Path, task.Name)
 	img, err := gg.LoadImage(imagePath)
 	var hasErrors bool
@@ -81,20 +77,15 @@ func ProcessTask(task *utils.Task) bool {
 		log.Errorf("unable to load image %s. err=%w", imagePath, err.Error())
 		hasErrors = true
 	}
-	img, err = resizeImage(task.Resize.Width, task.Resize.Height, img)
-	if err != nil {
-		log.Errorf("unable to resize image %s, err=%s", imagePath, err.Error())
-		hasErrors = true
-	}
 	if task.Watermark.Enabled {
 		log.Infof("Adding watermark %s to image %s", task.Watermark.Text, imagePath)
-		img, err = watermark.AddWatermark(img, task.Watermark.Text, task.Watermark.Color, task.Watermark.Size)
+		img, err = AddWatermark(img, task.Watermark.Text, task.Watermark.Color, task.Watermark.Size)
 		if err != nil {
 			log.Errorf("unable to add watermark %s to image %s. err=%v", task.Watermark.Text, imagePath, err.Error())
 		}
 	}
 	imageName := strings.TrimSuffix(task.Name, filepath.Ext(task.Name))
-	err = utils.SaveImage(task.SavePath, fmt.Sprintf("%s_%dx%d.jpg", imageName, task.Resize.Width, task.Resize.Height), img)
+	err = utils.SaveImage(task.SavePath, fmt.Sprintf("%s.jpg", imageName), img)
 	if err != nil {
 		log.Errorf("unable to save image %s. err=%s", path.Join(task.SavePath, fmt.Sprintf("%s_%dx%d.jpg", imageName, task.Resize.Width, task.Resize.Height)), err.Error())
 		hasErrors = true
@@ -102,7 +93,31 @@ func ProcessTask(task *utils.Task) bool {
 	return hasErrors
 }
 
-func resizeImage(w, h uint, img image.Image) (image.Image, error) {
-	m := resize.Resize(w, h, img, resize.Lanczos3)
-	return m, nil
+func AddWatermark(img image.Image, text string, c color.Gray16, size float64) (image.Image, error) {
+	imgWidth := img.Bounds().Dx()
+	imgHeight := img.Bounds().Dy()
+
+	dc := gg.NewContext(imgWidth, imgHeight)
+	dc.DrawImage(img, 0, 0)
+
+	fontPath, err := findfont.Find("arial.ttf")
+	if err != nil {
+		fontPath, err = findfont.Find("Arial.ttf")
+		if err != nil {
+			return nil, fmt.Errorf("unable to load font. err=%s", err.Error())
+		}
+	}
+	if err := dc.LoadFontFace(fontPath, size); err != nil {
+		return nil, fmt.Errorf("unable to load font. err=%s", err.Error())
+	}
+
+	// Position on the image
+	x := float64(imgWidth) - 200
+	y := float64(imgHeight) - 20
+	maxWidth := float64(imgWidth) - 60.0
+
+	dc.SetColor(c)
+	dc.DrawStringWrapped(text, x, y, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
+
+	return dc.Image(), nil
 }

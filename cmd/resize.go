@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/vfoucault/goPhoto/pkg/resize"
+	"github.com/vfoucault/goPhoto/pkg/watermark"
 )
 
 var (
@@ -19,7 +20,6 @@ var (
 	resizeSize           string
 )
 
-// cmdAwsDelete delete ACM certificates
 var cmdResize = &cobra.Command{
 	Use:     "resize",
 	Short:   "resize photos",
@@ -43,7 +43,7 @@ var cmdResize = &cobra.Command{
 		}
 
 		// Watermark
-		wm := resize.WaterMark{Size: resizeWatermarkSize, Text: resizeWatermarkText}
+		wm := watermark.WaterMark{Size: resizeWatermarkSize, Text: resizeWatermarkText}
 		switch resizeWatermarkColor {
 		case "white":
 			wm.Color = color.White
