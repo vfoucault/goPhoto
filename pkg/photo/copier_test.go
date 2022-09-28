@@ -17,8 +17,9 @@ func TestCopier_incrementStats(t *testing.T) {
 		Config *config.Config
 		Photos []*Photo
 		Stats  struct {
-			Count int
-			Size  int64
+			Count   int
+			Skipped int
+			Size    int64
 		}
 		StatsMutex  sync.Mutex
 		Workers     []*Worker
@@ -42,8 +43,9 @@ func TestCopier_incrementStats(t *testing.T) {
 			name: "Should increment the stats",
 			fields: fields{
 				Stats: struct {
-					Count int
-					Size  int64
+					Count   int
+					Skipped int
+					Size    int64
 				}{},
 				StatsMutex: sync.Mutex{},
 			},
@@ -68,7 +70,7 @@ func TestCopier_incrementStats(t *testing.T) {
 				Wg:          tt.fields.Wg,
 				ProgressBar: tt.fields.ProgressBar,
 			}
-			c.incrementStats(tt.args.size)
+			c.IncrementStats(tt.args.size)
 			if c.Stats.Size != tt.wantSize {
 				t.Errorf("incrementStats() got size=%d want size=%d", c.Stats.Size, tt.wantSize)
 			}

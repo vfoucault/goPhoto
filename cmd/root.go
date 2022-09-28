@@ -33,6 +33,8 @@ func setupCmd() {
 	cobra.OnInitialize(initConfig)
 
 	copyInit()
+	resizeInit()
+	watermarkInit()
 
 	cmdCopyPhoto.PersistentFlags().BoolVarP(&verbose, "verbose", "", false, "verbose output")
 	cmdCopyPhoto.PersistentFlags().StringVarP(&cfgFile, "config", "", "", "override configuration file")

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -24,8 +25,9 @@ type Copier struct {
 	Config *config.Config
 	Photos []*Photo
 	Stats  struct {
-		Count int
-		Size  int64
+		Count   int
+		Skipped int
+		Size    int64
 	}
 	StatsMutex  sync.Mutex
 	Workers     []*Worker
@@ -36,11 +38,17 @@ type Copier struct {
 	ProgressBar *progressbar.ProgressBar
 }
 
-func (c *Copier) incrementStats(size int64) {
+func (c *Copier) IncrementStats(size int64) {
 	c.StatsMutex.Lock()
 	defer c.StatsMutex.Unlock()
 	c.Stats.Count += 1
 	c.Stats.Size += size
+}
+
+func (c *Copier) IncrementSkipped() {
+	c.StatsMutex.Lock()
+	defer c.StatsMutex.Unlock()
+	c.Stats.Skipped += 1
 }
 
 func (c *Copier) CreateDestDirs() {
@@ -69,13 +77,18 @@ func NewCopier(config *config.Config, pctx context.Context) *Copier {
 
 func (c *Copier) Wait() {
 	for {
-		if len(c.Photos) == c.Stats.Count {
-			c.Stop()
-			break
+		select {
+		case <-c.Context.Done():
+			return
+		default:
+			if len(c.Photos) == c.Stats.Count+c.Stats.Skipped {
+				c.ProgressBar.Clear()
+				c.Stop()
+				break
+			}
+			time.Sleep(time.Second)
 		}
-		time.Sleep(time.Second)
 	}
-	c.Wg.Wait()
 }
 
 func (c *Copier) Start() error {
@@ -114,21 +127,21 @@ func (c *Copier) Search() {
 		files, _ := ioutil.ReadDir(c.Config.SourceDirectory)
 		for _, f := range files {
 			if utils.IsImage(f) {
-				c.addPhoto(f)
+				c.addPhoto(f, c.Config.SourceDirectory)
 			}
 		}
 	} else {
 		filepath.Walk(c.Config.SourceDirectory, func(aPath string, f os.FileInfo, _ error) error {
 			if utils.IsImage(f) {
-				c.addPhoto(f)
+				c.addPhoto(f, strings.TrimSuffix(aPath, f.Name()))
 			}
 			return nil
 		})
 	}
 }
 
-func (c *Copier) addPhoto(f fs.FileInfo) {
-	photo := &Photo{Path: c.Config.SourceDirectory, FileName: f.Name(), Copier: c}
+func (c *Copier) addPhoto(f fs.FileInfo, fPath string) {
+	photo := &Photo{Path: fPath, FileName: f.Name(), Copier: c}
 	stat := f.Sys().(*syscall.Stat_t)
 	photo.Atime = time.Unix(stat.Atimespec.Sec, stat.Atimespec.Nsec)
 	photo.Ctime = time.Unix(stat.Ctimespec.Sec, stat.Ctimespec.Nsec)
@@ -136,6 +149,10 @@ func (c *Copier) addPhoto(f fs.FileInfo) {
 	if err := photo.GetDateTaken(); err != nil {
 		log.Errorf("unable to get image date for image %v. err=%v", path.Join(c.Config.SourceDirectory, f.Name()), err.Error())
 	} else {
+		err := photo.GetHash()
+		if err != nil {
+			log.Errorf("unable to get hash for file %s", f.Name())
+		}
 		c.Photos = append(c.Photos, photo)
 	}
 }
@@ -166,9 +183,12 @@ func RunCopier(cfg *config.Config) {
 	copier.Wait()
 
 	elapsed := time.Since(start)
-	fmt.Println()
+	//fmt.Println()
 	log.Infof("Copy ended. Took %v", elapsed)
 	log.Infof("Copied %d images / %s.", copier.Stats.Count, bytefmt.ByteSize(uint64(copier.Stats.Size)))
+	if copier.Stats.Skipped > 0 {
+		log.Infof("Skipped %d images that were duplicates", copier.Stats.Skipped)
+	}
 	log.Infof("Byte rate %v/s", bytefmt.ByteSize(uint64(copier.Stats.Size/int64(elapsed.Seconds()))))
 }
 
